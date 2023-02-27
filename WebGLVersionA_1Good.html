@@ -1,0 +1,894 @@
+<!DOCTYPE HTML>
+<HTML lang="en">
+	<Head>
+	<Title>"Welcome TO WEB_GL Shaders"</TITLE>
+		
+		<!-- 
+		GLSL is the language used for shaders (GL Shader Language)
+		Attribute - you specify how to pull the data out of the buffers you supply.
+		Buffers - Data loaded onto the GPU (Normally vertex information)
+		Uniforms - global variables (in GLSL) that you set before you run the shader program
+		Textures - Textures are arrays of data you can randomly acces in your shader program.  
+		Varying - are way for a vertex shader to pass data to the fragmentShader.
+		-->
+		<button id="Triangles">Triangles</button>
+		<button id="Square">Square</button>
+		<button id="Circle">Circle</button>
+		<label for="slider">Slider:</label>
+		<input id="slider" type="range" min="0" max="1" step="0.01"  value="0.5">
+		<output id="value"></output>
+		<button id="Line">Line</button>
+		<button id="NPolygon" onclick="getNumber()">NPolygon</button>
+		<script id="2dVertexShader" type="notjs">
+		attribute vec4 a_position;
+		attribute vec3 a_color;
+		varying vec3 v_color;
+		void main()
+		{	
+			v_color = a_color;
+			//last thing in vertex shader
+			gl_Position=a_position;
+		}		
+		</SCRIPT>
+		
+		<script id="2dFragmentShader" type="notjs">
+		//Fragment shaders do not have precision so we have to set it.
+		precision mediump float;
+		varying vec3 v_color;
+		void main()
+		{
+			gl_FragColor = vec4(v_color,1); // between 0 and 1
+		}
+		</script>
+		
+		<script>
+		class InitWebGLProgram
+		{
+			constructor()
+			{
+				//setup our veiwport
+				gl.viewport(0,0, gl.canvas.width, gl.canvas.height);
+				//set clear colors RGBA, .5 = 128 in RGB
+				gl.clearColor(1,1,1,1);
+				gl.clear(gl.COLOR_BUFFER_BIT);
+			}
+			
+			createShader(type,source)
+			{
+				var shader = gl.createShader(type)
+				gl.shaderSource(shader,source);
+				gl.compileShader(shader);
+				var success = gl.getShaderParameter(shader,gl.COMPILE_STATUS);
+				if(success) 
+				{
+					return shader;
+				}
+				//else it didnt work
+				console.error(gl.getShaderInfoLog(shader));
+				gl.deleteShader(shader);
+			}
+			
+			createProgram(vs,fs)
+			{
+				var program = gl.createProgram();
+				gl.attachShader(program,vs);
+				gl.attachShader(program, fs);
+				gl.linkProgram(program);
+				var success = gl.getProgramParameter(program,gl.LINK_STATUS);
+				if(success)
+				{
+					return program;
+				}
+				console.error(gl.getProgramInfoLog(program));
+				gl.deleteProgram(program);
+			}
+		}
+		
+		
+		class Square
+		{
+			constructor(fill) {
+				this.isFinished = false;
+				this.vertCount = 0;
+				this.positions = [];
+				this.positionBuffer = gl.createBuffer();
+				this.fill = fill;
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+		
+			render(program) {
+				var positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+				gl.enableVertexAttribArray(positionAttributeLocation);
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				var size = 3;
+				var type = gl.FLOAT;
+				var normalize = false;
+				var stride = 6 * Float32Array.BYTES_PER_ELEMENT;
+				var offset = 0;
+				gl.vertexAttribPointer(positionAttributeLocation, size, type, normalize, stride, offset);
+		
+				var colorAttributeLocation = gl.getAttribLocation(program, "a_color");
+				gl.enableVertexAttribArray(colorAttributeLocation);
+				gl.vertexAttribPointer(colorAttributeLocation, 3, gl.FLOAT, false, stride, 3 * Float32Array.BYTES_PER_ELEMENT);
+		
+				var primitiveType = gl.TRIANGLE_STRIP;
+				
+			  if(this.fill)
+				primitiveType= gl.LINE_LOOP;
+			  else
+				primitiveType = gl.TRIANGLE_STRIP;
+				var offset = 0;
+				gl.drawArrays(primitiveType, offset, this.vertCount);
+			}
+		
+			addPoint(x, y,red,green,blue) {
+				var red = red,
+					green = green,
+					blue = blue;
+				this.positions.push(x); // x coord
+				this.positions.push(y); // y coord
+				this.positions.push(0); // z coord
+				this.positions.push(red); // red
+				this.positions.push(green); // green
+				this.positions.push(blue); // blue
+				this.vertCount++;
+				
+				if (this.vertCount == 2) { // second click
+					var firstX = this.positions[0];
+					var firstY = this.positions[1];
+					var oppositeX1 = firstX;
+					var oppositeY1 = y;
+					var oppositeX2 = x;
+					var oppositeY2 = firstY;
+					this.positions.push(oppositeX1);
+					this.positions.push(oppositeY1);
+					this.positions.push(0);
+					this.positions.push(red);
+					this.positions.push(green);
+					this.positions.push(blue);
+					this.positions.push(oppositeX2);
+					this.positions.push(oppositeY2);
+					this.positions.push(0);
+					this.positions.push(red);
+					this.positions.push(green);
+					this.positions.push(blue);
+					this.vertCount += 2;
+					this.isFinished = true;
+				}
+			
+				if (this.vertCount == 4) { // duplicate last vertex
+					var lastX = this.positions[0];
+					var lastY = this.positions[1];
+					this.positions.push(lastX);
+					this.positions.push(lastY);
+					this.positions.push(0);
+					this.positions.push(red);
+					this.positions.push(green);
+					this.positions.push(blue);
+					this.vertCount++;
+				}
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+			
+			tempAddPoint(x, y) {
+				this.positions.push(x); // x coord
+				this.positions.push(y); // y coord
+				this.positions.push(0); // z coord
+				this.positions.push(0); // red
+				this.positions.push(0); // green
+				this.positions.push(1); // blue
+				this.vertCount++;
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+			
+			tempRemovePoint() {
+				for (let i = 0; i < 6; i++) {
+					this.positions.pop();
+				}
+				this.vertCount--;
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+		}
+		
+		class Triangle
+		{
+			constructor(fill)
+			{
+				this.isFinished = false;
+				this.vertCount = 0;
+				this.fill=fill;
+				//*Now we have to explain to GLSL how to interprate our data*/
+				//Find the position attribute location in the program
+				//2nd create a position buffer
+				//3rd create a 
+				this.positions = [];
+			   //Create a position buffer
+			   this.positionBuffer = gl.createBuffer();
+			   //Bind "ARRAY_BUFFER type to the positionBuffer
+			   gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+					//load the points ---must be done in constructor not render function --- 
+					//last bound buffer is where data is sent
+			   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+			
+			render(program)
+			{
+				//Now we have to find the attribute position in the program --- think of this as a pointer
+				var positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+				//now we specify HOW TO read our vertices
+				gl.enableVertexAttribArray(positionAttributeLocation);
+				//This will represent a shape. we only want to use buffer data once per shape
+				//three 2d points
+				
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				//Tell the attribute how to get sata out of positionBuffer (ARRAY_BUFFER)
+				var size = 3; // 3 components per vertice
+				var type = gl.FLOAT; //the data is 32bit floats
+				var normalize = false; //dont normalize the data
+				var stride = 6*Float32Array.BYTES_PER_ELEMENT; //0 = move forward * sizeof (Type) each iteration to get the next position
+				var offset = 0*Float32Array.BYTES_PER_ELEMENT; //start at beginning of buffer
+				//KNOW THIS !!!!!
+				gl.vertexAttribPointer(positionAttributeLocation, size,
+				type, normalize, stride, offset)
+				
+				var colorAttributeLocation = gl.getAttribLocation(program, "a_color");
+				gl.enableVertexAttribArray(colorAttributeLocation);
+				gl.vertexAttribPointer
+				(
+					colorAttributeLocation,
+					3,
+					gl.FLOAT,
+					false,
+					6*Float32Array.BYTES_PER_ELEMENT,
+					3*Float32Array.BYTES_PER_ELEMENT
+				)
+				
+				//var primitiveType = gl.TRIANGLES;
+				var primitiveType = gl.TRIANGLES;
+				
+			  if(this.fill)
+				primitiveType= gl.LINE_LOOP;
+			  else
+				primitiveType = gl.TRIANGLES;
+				var offset = 0;
+				//var count = 3;
+				//primitiveType should be coming from main
+				gl.drawArrays(primitiveType, offset, this.vertCount);
+				
+				if(this.isFinished)
+				{
+					gl.drawArrays(primitiveType, offset, this.vertCount);
+				}
+				else
+				{
+					gl.drawArrays(gl.LINE_LOOP, offset, this.vertCount);
+				}
+			}
+			
+			addPoint(x,y,red,green,blue) 
+			{
+				this.positions.push(x);  //x coord
+				this.positions.push(y);	 //y coord
+				this.positions.push(0);	 //z coord
+				this.positions.push(red);  //red
+				this.positions.push(green);  //green
+				this.positions.push(blue);  //blue
+				this.vertCount++;
+				if(this.vertCount == 3)
+				{
+					this.isFinished = true;
+				}
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+			
+			tempAddPoint(x,y)
+			{
+				this.positions.push(x);  //x coord
+				this.positions.push(y);	 //y coord
+				this.positions.push(0);	 //z coord
+				this.positions.push(0);  //red
+				this.positions.push(0);  //green
+				this.positions.push(1);  //blue
+				this.vertCount++;
+				//only check to see if the shape is finished in the addPoint function
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+			
+			tempRemovePoint()
+			{
+				for(let i=0; i<6; i++)
+				{
+					this.positions.pop();
+				}
+				this.vertCount--; //important to sub vertCount otherwise we will get a weird problem where vertCount will keep going up
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+		}
+
+		class Line
+		{
+			constructor()
+			{
+				this.isFinished = false;
+				this.vertCount = 0;
+				//*Now we have to explain to GLSL how to interprate our data*/
+				//Find the position attribute location in the program
+				//2nd create a position buffer
+				//3rd create a 
+				this.positions = [];
+			   //Create a position buffer
+			   this.positionBuffer = gl.createBuffer();
+			   //Bind "ARRAY_BUFFER type to the positionBuffer
+			   gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+					//load the points ---must be done in constructor not render function --- 
+					//last bound buffer is where data is sent
+			   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+			
+			render(program)
+			{
+				//Now we have to find the attribute position in the program --- think of this as a pointer
+				var positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+				//now we specify HOW TO read our vertices
+				gl.enableVertexAttribArray(positionAttributeLocation);
+				//This will represent a shape. we only want to use buffer data once per shape
+				//three 2d points
+				
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				//Tell the attribute how to get sata out of positionBuffer (ARRAY_BUFFER)
+				var size = 3; // 3 components per vertice
+				var type = gl.FLOAT; //the data is 32bit floats
+				var normalize = false; //dont normalize the data
+				var stride = 6*Float32Array.BYTES_PER_ELEMENT; //0 = move forward * sizeof (Type) each iteration to get the next position
+				var offset = 0*Float32Array.BYTES_PER_ELEMENT; //start at beginning of buffer
+				//KNOW THIS !!!!!
+				gl.vertexAttribPointer(positionAttributeLocation, size,
+				type, normalize, stride, offset)
+				
+				var colorAttributeLocation = gl.getAttribLocation(program, "a_color");
+				gl.enableVertexAttribArray(colorAttributeLocation);
+				gl.vertexAttribPointer
+				(
+					colorAttributeLocation,
+					3,
+					gl.FLOAT,
+					false,
+					6*Float32Array.BYTES_PER_ELEMENT,
+					3*Float32Array.BYTES_PER_ELEMENT
+				)
+				
+				//var primitiveType = gl.TRIANGLES;
+				var primitiveType = gl.LINES;
+				var offset = 0;
+				//var count = 3;
+				//primitiveType should be coming from main
+				gl.drawArrays(primitiveType, offset, this.vertCount);
+				
+				if(this.isFinished)
+				{
+					gl.drawArrays(primitiveType, offset, this.vertCount);
+				}
+				else
+				{
+					gl.drawArrays(gl.LINE_LOOP, offset, this.vertCount);
+				}
+			}
+			
+			addPoint(x,y,red,green,blue) 
+			{
+				this.positions.push(x);  //x coord
+				this.positions.push(y);	 //y coord
+				this.positions.push(0);	 //z coord
+				this.positions.push(red);  //red
+				this.positions.push(green);  //green
+				this.positions.push(blue);  //blue
+				this.vertCount++;
+				if(this.vertCount == 2)
+				{
+					this.isFinished = true;
+				}
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+			
+			tempAddPoint(x,y)
+			{
+				this.positions.push(x);  //x coord
+				this.positions.push(y);	 //y coord
+				this.positions.push(0);	 //z coord
+				this.positions.push(0);  //red
+				this.positions.push(0);  //green
+				this.positions.push(1);  //blue
+				this.vertCount++;
+				//only check to see if the shape is finished in the addPoint function
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+			
+			tempRemovePoint()
+			{
+				for(let i=0; i<6; i++)
+				{
+					this.positions.pop();
+				}
+				this.vertCount--; //important to sub vertCount otherwise we will get a weird problem where vertCount will keep going up
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+		}
+
+		class Circle {
+			constructor(radii,fill)
+			{
+				this.isFinished = false;
+				this.vertCount = 0;
+				this.radii=radii;
+				this.fill = fill;
+				//*Now we have to explain to GLSL how to interprate our data*/
+				//Find the position attribute location in the program
+				//2nd create a position buffer
+				//3rd create a 
+				this.positions = [];
+			   //Create a position buffer
+			   this.positionBuffer = gl.createBuffer();
+			   //Bind "ARRAY_BUFFER type to the positionBuffer
+			   gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+					//load the points ---must be done in constructor not render function --- 
+					//last bound buffer is where data is sent
+			   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+			
+			render(program)
+			{
+				//Now we have to find the attribute position in the program --- think of this as a pointer
+				var positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+				//now we specify HOW TO read our vertices
+				gl.enableVertexAttribArray(positionAttributeLocation);
+				//This will represent a shape. we only want to use buffer data once per shape
+				//three 2d points
+				
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				//Tell the attribute how to get sata out of positionBuffer (ARRAY_BUFFER)
+				var size = 3; // 3 components per vertice
+				var type = gl.FLOAT; //the data is 32bit floats
+				var normalize = false; //dont normalize the data
+				var stride = 6*Float32Array.BYTES_PER_ELEMENT; //0 = move forward * sizeof (Type) each iteration to get the next position
+				var offset = 0*Float32Array.BYTES_PER_ELEMENT; //start at beginning of buffer
+				//KNOW THIS !!!!!
+				gl.vertexAttribPointer(positionAttributeLocation, size,
+				type, normalize, stride, offset)
+				
+				var colorAttributeLocation = gl.getAttribLocation(program, "a_color");
+				gl.enableVertexAttribArray(colorAttributeLocation);
+				gl.vertexAttribPointer
+				(
+					colorAttributeLocation,
+					3,
+					gl.FLOAT,
+					false,
+					6*Float32Array.BYTES_PER_ELEMENT,
+					3*Float32Array.BYTES_PER_ELEMENT
+				)
+				
+				//var primitiveType = gl.TRIANGLES;
+				var primitiveType = gl.TRIANGLE_FAN;
+				
+			  	if(this.fill)
+					primitiveType= gl.LINE_LOOP;
+			  	else
+					primitiveType = gl.TRIANGLE_FAN;
+				var offset = 0;
+				//var count = 3;
+				//primitiveType should be coming from main
+				gl.drawArrays(primitiveType, offset, this.vertCount);
+				
+				if(this.isFinished)
+				{
+					gl.drawArrays(primitiveType, offset, this.vertCount);
+				}
+				else
+				{
+					gl.drawArrays(gl.LINE_LOOP, offset, this.vertCount);
+				}
+			}
+			
+			addPoint(x,y,red,green,blue) 
+			{
+				const centerX = x;
+				const centerY = y;
+				const radius = this.radii; // set the radius of the circle
+				const numSides = 32; // set the number of vertices that make up the circle
+
+				// Add center vertex
+				this.positions.push(centerX);
+				this.positions.push(centerY);
+				this.positions.push(0);
+				this.positions.push(red);
+				this.positions.push(green);
+				this.positions.push(blue);
+				this.vertCount++;
+
+				// Add vertices for the circle
+				const anglePerSide = (2 * Math.PI) / numSides;
+				for (let i = 0; i <= numSides; i++) {
+					const angle = i * anglePerSide;
+					const xPos = centerX + radius * Math.cos(angle);
+					const yPos = centerY + radius * Math.sin(angle);
+
+					this.positions.push(xPos);
+					this.positions.push(yPos);
+					this.positions.push(0);
+					this.positions.push(red);
+					this.positions.push(green);
+					this.positions.push(blue);
+					this.vertCount++;
+				}
+
+				// Finish drawing the circle
+				if (this.vertCount === numSides + 2) {
+					this.isFinished = true;
+				}
+
+				// Update the position buffer with the new vertices
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+			
+			tempAddPoint(x,y)
+			{
+				this.positions.push(x);  //x coord
+				this.positions.push(y);	 //y coord
+				this.positions.push(0);	 //z coord
+				this.positions.push(0);  //red
+				this.positions.push(0);  //green
+				this.positions.push(1);  //blue
+				this.vertCount++;
+				//only check to see if the shape is finished in the addPoint function
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+			
+			tempRemovePoint()
+			{
+				for(let i=0; i<6; i++)
+				{
+					this.positions.pop();
+				}
+				this.vertCount--; //important to sub vertCount otherwise we will get a weird problem where vertCount will keep going up
+				gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+		  }
+		  
+		  class Polygon {
+			constructor(n,fill) {
+			  this.isFinished = false;
+			  this.vertCount = 0;
+			  this.positions = [];
+			  this.n=n;
+			  this.fill=fill;
+			  this.positionBuffer = gl.createBuffer();
+			  gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+			  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+		  
+			render(program) {
+			  var positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+			  gl.enableVertexAttribArray(positionAttributeLocation);
+			  gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+			  var size = 3;
+			  var type = gl.FLOAT;
+			  var normalize = false;
+			  var stride = 6 * Float32Array.BYTES_PER_ELEMENT;
+			  var offset = 0;
+			  gl.vertexAttribPointer(positionAttributeLocation, size, type, normalize, stride, offset);
+		  
+			  var colorAttributeLocation = gl.getAttribLocation(program, "a_color");
+			  gl.enableVertexAttribArray(colorAttributeLocation);
+			  gl.vertexAttribPointer(colorAttributeLocation, 3, gl.FLOAT, false, 6 * Float32Array.BYTES_PER_ELEMENT, 3 * Float32Array.BYTES_PER_ELEMENT);
+			  var primitiveType = gl.TRIANGLE_STRIP; 
+			  if(this.fill)
+				primitiveType= gl.LINE_LOOP;
+			  else
+				primitiveType = gl.TRIANGLE_STRIP;
+			  var offset = 0;
+			  gl.drawArrays(primitiveType, offset, this.vertCount);
+		  
+			  if (this.isFinished) {
+				gl.drawArrays(primitiveType, offset, this.vertCount);
+			  } else {
+				gl.drawArrays(gl.LINE_LOOP, offset, this.vertCount);
+			  }
+			}
+		  
+			addPoint(x, y, red, green, blue) {
+			  this.positions.push(x);
+			  this.positions.push(y);
+			  this.positions.push(0);
+			  this.positions.push(red);
+			  this.positions.push(green);
+			  this.positions.push(blue);
+			  this.vertCount++;
+			  if (this.vertCount == this.n) { // changed to check for n vertices
+				this.isFinished = true;
+				var lastX = this.positions[0];
+				var lastY = this.positions[1];
+				this.positions.push(lastX); // duplicate the last vertex
+				this.positions.push(lastY);
+				this.positions.push(0);
+				this.positions.push(red);
+				this.positions.push(green);
+				this.positions.push(blue);
+				this.vertCount++;
+			  }
+			  
+			  gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+			  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+		  
+			tempAddPoint(x, y) {
+			  this.positions.push(x);
+			  this.positions.push(y);
+			  this.positions.push(0);
+			  this.positions.push(0);
+			  this.positions.push(0);
+			  this.positions.push(1);
+			  this.vertCount++;
+			  gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+			  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+		  
+			tempRemovePoint() {
+			  for (let i = 0; i < 6; i++) {
+				this.positions.pop();
+			  }
+			  this.vertCount--;
+			  gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+			  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.positions), gl.STATIC_DRAW);
+			}
+		  }
+		
+		class main
+		{
+			constructor()
+			{
+				this.webGL = new InitWebGLProgram();
+				var vertexShaderSource = document.getElementById('2dVertexShader').text;
+				var fragmentShaderSource = document.getElementById('2dFragmentShader').text;
+				var vertexShader = this.webGL.createShader(gl.VERTEX_SHADER, vertexShaderSource);
+				var fragmentShader = this.webGL.createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+				//link to program
+				this.program = this.webGL.createProgram(vertexShader,fragmentShader);
+				//what program to use
+				gl.useProgram(this.program);
+				this.shape = 0
+				this.size= 0.5
+				this.red = 1;
+				this.green = 0;
+				this.blue = 0;
+				this.n=1;
+				this.fill = false;
+				this.shapes = [];
+			}	
+			
+			renderAll()
+			{
+				gl.clear(gl.COLOR_BUFFER_BIT);
+				for(let i = 0; i < this.shapes.length; i++) 
+				{
+					this.shapes[i].render(this.program);
+				}
+			}
+			
+			mouseHandle(event) 
+			{
+				//Convert coordinates
+				var rect = canvas.getBoundingClientRect();
+				var realX = event.clientX - rect.left;
+				var realY = event.clientY - rect.top;
+				console.log(realX+ ","+ realY);
+				var x = -1 + 2*realX/myCanvas.width;
+				var y = -1 + 2*(myCanvas.height - realY)/myCanvas.height;
+				console.log("the click occurred on "+x+","+y);
+				
+				if(this.shapes.length == 0 || this.shapes[this.shapes.length-1].isFinished)
+				{
+					switch(this.shape) {
+						case 0:
+						  this.shapes.push(new Triangle(this.fill));
+						  break;
+						case 1:
+						  this.shapes.push(new Square(this.fill));
+						  break;
+						case 2:
+						  this.shapes.push(new Line());
+						  break;
+						case 3:
+						  this.shapes.push(new Circle(this.size,this.fill));
+						  break;
+						case 4:
+						  this.shapes.push(new Polygon(this.n,this.fill));
+						  break;
+						  // code block
+					  }
+
+					
+					this.shapes[this.shapes.length-1].addPoint(x,y,this.red,this.green,this.blue);
+				}
+				else
+				{
+					this.shapes[this.shapes.length-1].addPoint(x,y,this.red,this.green,this.blue);
+				}
+				this.renderAll();
+			}
+			
+			mouseMove(event)
+			{
+				//Convert coordinates
+				var rect = canvas.getBoundingClientRect();
+				var realX = event.clientX - rect.left;
+				var realY = event.clientY - rect.top;
+				console.log(realX+ ","+ realY);
+				var x = -1 + 2*realX/myCanvas.width;
+				var y = -1 + 2*(myCanvas.height - realY)/myCanvas.height;
+				console.log("the click occurred on "+x+","+y);
+				this.shapes[this.shapes.length-1].tempAddPoint(x,y);
+				this.renderAll();
+				this.shapes[this.shapes.length-1].tempRemovePoint();
+			}
+		}
+		
+		function mouseH(event)
+		{
+			m.mouseHandle(event);
+		}
+		
+		function mouseM(event)
+		{
+			if(m.shapes.length > 0 && !m.shapes[m.shapes.length-1].isFinished) //if the last shape is not finished
+			{
+				m.mouseMove(event);
+			}
+		}
+		
+		</script>
+	</Head>
+	<BODY>
+		<HEADER>
+		
+		</HEADER>
+		
+		<CANVAS id="myCanvas" width="800" height="800" style="border: 1px solid black">
+			Your browser does not support canvas.
+		</CANVAS>
+		
+
+		<FOOTER>
+			<button id="Red" style="background: red;color:white;">Red</button>
+			<button id="Green" style="background: green;color:white;">Green</button>
+			<button id="Blue" style="background: blue;color:white;">Blue</button>
+			<button id="Purple" style="background: purple;color:white;">Purple</button>
+			<button id="Cyan" style="background: cyan;color:white;">Cyan</button>
+			<label class="switch">
+				<input type="checkbox" id="toggle-switch">
+				<span class="slider round"> Outline?</span>
+			</label>
+		</FOOTER>
+		<SCRIPT>
+			var canvas = document.getElementById("myCanvas");
+			canvas.addEventListener("click",mouseH);
+			canvas.addEventListener("mousemove", mouseM);
+			var gl = canvas.getContext("webgl");
+			
+			var m = new main();
+			document.getElementById("Triangles").addEventListener("click", myFunction);
+			document.getElementById("Square").addEventListener("click", myFunction1);
+			document.getElementById("Circle").addEventListener("click", myFunction2);
+			document.getElementById("Line").addEventListener("click", myFunction3);
+			
+			//colors
+			document.getElementById("Red").addEventListener("click", myFunctionRed);
+			document.getElementById("Green").addEventListener("click", myFunctionGreen);
+			document.getElementById("Blue").addEventListener("click", myFunctionBlue);
+			document.getElementById("Purple").addEventListener("click", myFunctionPurple);
+			document.getElementById("Cyan").addEventListener("click", myFunctionCyan);
+			const toggleSwitch = document.getElementById('toggle-switch');
+			function getNumber() {
+				const number = prompt("Please enter a number:");
+				if (number != null) {
+				  alert("You entered: " + number);
+				  m.shape=4;
+				  m.n=number;
+				}
+			  }
+
+			function myFunction(){
+				console.log("clicked");
+				m.shape = 0;
+				console.log(m.shape);	
+			}
+			function myFunction1(){
+				console.log("clicked");
+				m.shape = 1;
+				console.log(m.shape);	
+			}
+			function myFunction2(){
+				console.log("clicked");
+				m.shape = 3;
+				console.log(m.shape);	
+			}
+			function myFunction3(){
+				console.log("clickedLine");
+				m.shape = 2;
+				console.log(m.shape);	
+			}
+
+			document.getElementById("slider").oninput = function() {
+				myFunction4()};
+				
+				function myFunction4() {
+			   var val = document.getElementById("slider").value //gets the oninput value
+			   m.size = val;
+			   console.log(m.size);
+			   
+			}
+			
+			function myFunctionRed(){
+				
+				m.red = 1;
+				m.blue = 0;
+				m.green = 0;
+				
+			}
+
+			function myFunctionGreen(){
+				
+				m.red = 0;
+				m.blue = 0;
+				m.green = 1;
+			
+			}
+
+			function myFunctionBlue(){
+				
+				m.red = 0;
+				m.blue = 1;
+				m.green = 0;
+				
+			}
+
+			function myFunctionPurple(){
+				
+				m.red = 1;
+				m.blue = 1;
+				m.green = 0;
+				
+			}
+
+			function myFunctionCyan(){
+				
+				m.red = 0;
+				m.blue = 1;
+				m.green = 1;
+				
+			}
+
+			toggleSwitch.addEventListener('change', (event) => {
+				const isChecked = event.target.checked;
+				m.fill = isChecked;
+				console.log(isChecked);
+			  });
+
+			
+		</SCRIPT>		
+	</BODY>
+</HTML>
+		
+		
